@@ -84,7 +84,7 @@ struct MenuView: View {
                     }
                 }
                 Button("Settings…") {
-                    WindowManager.shared.show(id: "settings", title: "Rapid-MLX Settings", size: NSSize(width: 520, height: 680), closeOnEsc: true) {
+                    WindowManager.shared.show(id: "settings", title: "Rapid-MLX Settings", size: NSSize(width: 520, height: 610), closeOnEsc: true) {
                         SettingsView().environmentObject(c)
                     }
                 }
@@ -312,7 +312,7 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .onChange(of: c.modelsDir) { _ in c.refreshModels() }
         .onAppear { hostDraft = c.host; portDraft = c.port }
-        .frame(minWidth: 480, minHeight: 640)
+        .frame(minWidth: 480, minHeight: 560)
     }
 
     private func pick(directory: Bool, start: String) -> String? {
