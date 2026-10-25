@@ -18,30 +18,10 @@ final class WindowManager {
     func isVisible(id: String) -> Bool { windows[id]?.isVisible ?? false }
     func hide(id: String) { windows[id]?.orderOut(nil) }
 
-    /// Closes the menu bar popover by "clicking" the status item, so SwiftUI's own
-    /// open/closed state stays in sync (hiding the panel directly left it out of sync).
-    private func dismissMenuPanel() {
-        let ours = Set(windows.values.map { ObjectIdentifier($0) })
-        let panels = NSApp.windows.filter { w in
-            !ours.contains(ObjectIdentifier(w)) && !w.className.contains("StatusBarWindow")
-                && (w is NSPanel || w.className.contains("MenuBarExtra"))
-        }
-        guard panels.contains(where: { $0.isVisible }) else { return }
-        for w in NSApp.windows where w.className.contains("StatusBarWindow") {
-            if let button = statusButton(in: w.contentView) {
-                button.performClick(nil)
-                return
-            }
-        }
-        panels.forEach { $0.orderOut(nil) }     // fallback
-    }
+    /// Set by AppDelegate: closes the menu bar popover.
+    var dismissMenu: (() -> Void)?
 
-    private func statusButton(in view: NSView?) -> NSStatusBarButton? {
-        guard let view else { return nil }
-        if let b = view as? NSStatusBarButton { return b }
-        for sub in view.subviews { if let b = statusButton(in: sub) { return b } }
-        return nil
-    }
+    private func dismissMenuPanel() { dismissMenu?() }
 
     func show<V: View>(id: String, title: String, size: NSSize, closeOnEsc: Bool = false, @ViewBuilder content: () -> V) {
         dismissMenuPanel()
@@ -94,7 +74,6 @@ struct MenuView: View {
         }
         .padding(12)
         .frame(width: 340)
-        .onAppear { c.refreshModels() }
     }
 
     private var statusHeader: some View {

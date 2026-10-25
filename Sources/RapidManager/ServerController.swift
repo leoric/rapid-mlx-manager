@@ -112,14 +112,6 @@ final class ServerController: ObservableObject {
             ProcessTree.terminate(PIDBox.shared.pid)
         }
 
-        // Right-click on the menu bar icon toggles the Models window.
-        NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown]) { [weak self] event in
-            guard let w = event.window,
-                  w.className.contains("StatusBar") || w.level == .statusBar else { return event }
-            Task { @MainActor in self?.toggleManager() }
-            return nil
-        }
-
         refreshModels()
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.pollHealth() }
