@@ -59,12 +59,12 @@ struct MenuView: View {
             HStack {
                 Button("Manage…") { c.showManager() }
                 Button("Logs…") {
-                    WindowManager.shared.show(id: "logs", title: "Rapid-MLX Logs", size: NSSize(width: 680, height: 420), closeOnEsc: true) {
+                    WindowManager.shared.show(id: "logs", title: "RapidManager Logs", size: NSSize(width: 680, height: 420), closeOnEsc: true) {
                         LogView().environmentObject(c)
                     }
                 }
                 Button("Settings…") {
-                    WindowManager.shared.show(id: "settings", title: "Rapid-MLX Settings", size: NSSize(width: 520, height: 610), closeOnEsc: true) {
+                    WindowManager.shared.show(id: "settings", title: "RapidManager Settings", size: NSSize(width: 520, height: 610), closeOnEsc: true) {
                         SettingsView().environmentObject(c)
                     }
                 }

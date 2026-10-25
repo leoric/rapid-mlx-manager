@@ -65,6 +65,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .failed: name = "exclamationmark.triangle"
         case .stopped: name = "bolt.circle"
         }
-        statusItem?.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "Rapid-MLX")
+        statusItem?.button?.image = NSImage(systemSymbolName: name, accessibilityDescription: "RapidManager")
     }
 }

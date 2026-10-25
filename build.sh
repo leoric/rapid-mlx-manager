@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds build/rapid-manager.app using only the Swift CLI (no Xcode project needed).
+# Builds build/RapidManager.app using only the Swift CLI (no Xcode project needed).
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -15,10 +15,10 @@ if [ ! -d Sources/RapidManager ]; then
 fi
 
 swift build -c release
-APP="build/rapid-manager.app"
+APP="build/RapidManager.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
-cp .build/release/rapid-manager "$APP/Contents/MacOS/rapid-manager"
+cp .build/release/RapidManager "$APP/Contents/MacOS/RapidManager"
 cp Info.plist "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
 echo "Built $APP"

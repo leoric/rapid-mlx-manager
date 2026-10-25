@@ -81,7 +81,7 @@ final class ServerController: ObservableObject {
     }
 
     func showManager() {
-        WindowManager.shared.show(id: "models", title: "Rapid-MLX Models", size: NSSize(width: 780, height: 560), closeOnEsc: true) {
+        WindowManager.shared.show(id: "models", title: "RapidManager Models", size: NSSize(width: 780, height: 560), closeOnEsc: true) {
             ModelManagerView().environmentObject(self).environmentObject(manager)
         }
     }
