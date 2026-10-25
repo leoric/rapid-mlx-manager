@@ -3,6 +3,13 @@ import AppKit
 
 // MARK: - Window helper (reliable for menu-bar-only apps)
 
+final class EscWindow: NSWindow {
+    var closeOnEsc = false
+    override func cancelOperation(_ sender: Any?) {
+        if closeOnEsc { performClose(sender) } else { super.cancelOperation(sender) }
+    }
+}
+
 @MainActor
 final class WindowManager {
     static let shared = WindowManager()
@@ -11,15 +18,42 @@ final class WindowManager {
     func isVisible(id: String) -> Bool { windows[id]?.isVisible ?? false }
     func hide(id: String) { windows[id]?.orderOut(nil) }
 
-    func show<V: View>(id: String, title: String, size: NSSize, @ViewBuilder content: () -> V) {
+    /// Closes the menu bar popover by "clicking" the status item, so SwiftUI's own
+    /// open/closed state stays in sync (hiding the panel directly left it out of sync).
+    private func dismissMenuPanel() {
+        let ours = Set(windows.values.map { ObjectIdentifier($0) })
+        let panels = NSApp.windows.filter { w in
+            !ours.contains(ObjectIdentifier(w)) && !w.className.contains("StatusBarWindow")
+                && (w is NSPanel || w.className.contains("MenuBarExtra"))
+        }
+        guard panels.contains(where: { $0.isVisible }) else { return }
+        for w in NSApp.windows where w.className.contains("StatusBarWindow") {
+            if let button = statusButton(in: w.contentView) {
+                button.performClick(nil)
+                return
+            }
+        }
+        panels.forEach { $0.orderOut(nil) }     // fallback
+    }
+
+    private func statusButton(in view: NSView?) -> NSStatusBarButton? {
+        guard let view else { return nil }
+        if let b = view as? NSStatusBarButton { return b }
+        for sub in view.subviews { if let b = statusButton(in: sub) { return b } }
+        return nil
+    }
+
+    func show<V: View>(id: String, title: String, size: NSSize, closeOnEsc: Bool = false, @ViewBuilder content: () -> V) {
+        dismissMenuPanel()
         if let w = windows[id] {
             w.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
-        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size),
-                         styleMask: [.titled, .closable, .resizable, .miniaturizable],
-                         backing: .buffered, defer: false)
+        let w = EscWindow(contentRect: NSRect(origin: .zero, size: size),
+                          styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                          backing: .buffered, defer: false)
+        w.closeOnEsc = closeOnEsc
         w.title = title
         w.isReleasedWhenClosed = false
         w.contentView = NSHostingView(rootView: content())
@@ -45,12 +79,12 @@ struct MenuView: View {
             HStack {
                 Button("Manage…") { c.showManager() }
                 Button("Logs…") {
-                    WindowManager.shared.show(id: "logs", title: "Rapid-MLX Logs", size: NSSize(width: 680, height: 420)) {
+                    WindowManager.shared.show(id: "logs", title: "Rapid-MLX Logs", size: NSSize(width: 680, height: 420), closeOnEsc: true) {
                         LogView().environmentObject(c)
                     }
                 }
                 Button("Settings…") {
-                    WindowManager.shared.show(id: "settings", title: "Rapid-MLX Settings", size: NSSize(width: 480, height: 420)) {
+                    WindowManager.shared.show(id: "settings", title: "Rapid-MLX Settings", size: NSSize(width: 520, height: 680), closeOnEsc: true) {
                         SettingsView().environmentObject(c)
                     }
                 }
@@ -101,6 +135,9 @@ struct MenuView: View {
                     .disabled(c.status == .external)
             }
             Spacer()
+            Toggle("Thinking", isOn: Binding(get: { c.thinking }, set: { c.setThinking($0) }))
+                .toggleStyle(.checkbox)
+                .help("Unchecked starts the server with --no-thinking")
             if c.busy { ProgressView().controlSize(.small) }
         }
         .disabled(c.busy)
@@ -203,6 +240,8 @@ struct LogView: View {
 
 struct SettingsView: View {
     @EnvironmentObject var c: ServerController
+    @State private var hostDraft = ""
+    @State private var portDraft = ""
 
     private var binaryOK: Bool {
         FileManager.default.isExecutableFile(atPath: (c.binaryPath as NSString).expandingTildeInPath)
@@ -241,14 +280,39 @@ struct SettingsView: View {
                 Text("If set, it is also passed to Rapid-MLX as HF_HUB_CACHE.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Endpoint") {
-                LabeledContent("Address", value: Config.endpoint)
-                Text("Fixed, so existing clients keep working when you switch models.")
+                LabeledContent("Host:Port") {
+                    HStack(spacing: 6) {
+                        TextField("", text: $hostDraft, prompt: Text("127.0.0.1"))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.leading)
+                        Text(":")
+                        TextField("", text: $portDraft, prompt: Text("8000"))
+                            .labelsHidden()
+                            .textFieldStyle(.roundedBorder)
+                            .multilineTextAlignment(.leading)
+                            .frame(width: 72)
+                    }
+                }
+                HStack {
+                    Button("Apply") { c.applyEndpoint(host: hostDraft, port: portDraft) }
+                        .disabled(hostDraft == c.host && portDraft == c.port)
+                    Button("Reset to default") {
+                        hostDraft = Config.defaultHost
+                        portDraft = String(Config.defaultPort)
+                        c.applyEndpoint(host: hostDraft, port: portDraft)
+                    }
+                    Spacer()
+                }
+                LabeledContent("Current", value: Config.endpoint)
+                Text("If the server is running, applying restarts it.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .onChange(of: c.modelsDir) { _ in c.refreshModels() }
-        .frame(minWidth: 460, minHeight: 400)
+        .onAppear { hostDraft = c.host; portDraft = c.port }
+        .frame(minWidth: 480, minHeight: 640)
     }
 
     private func pick(directory: Bool, start: String) -> String? {

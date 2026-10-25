@@ -181,18 +181,22 @@ enum ProcessTree {
 enum Probe {
     /// Plain TCP connect, so polling doesn't spam the server log with HTTP requests.
     static func portOpen(host: String, port: Int) -> Bool {
-        let fd = socket(AF_INET, SOCK_STREAM, 0)
-        guard fd >= 0 else { return false }
-        defer { close(fd) }
-        var addr = sockaddr_in()
-        addr.sin_family = sa_family_t(AF_INET)
-        addr.sin_port = in_port_t(UInt16(port)).bigEndian
-        addr.sin_addr.s_addr = inet_addr(host)
-        let r = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        var res: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, String(port), &hints, &res) == 0, let first = res else { return false }
+        defer { freeaddrinfo(res) }
+        var cur: UnsafeMutablePointer<addrinfo>? = first
+        while let ai = cur {
+            let fd = socket(ai.pointee.ai_family, ai.pointee.ai_socktype, ai.pointee.ai_protocol)
+            if fd >= 0 {
+                let r = connect(fd, ai.pointee.ai_addr, ai.pointee.ai_addrlen)
+                close(fd)
+                if r == 0 { return true }
             }
+            cur = ai.pointee.ai_next
         }
-        return r == 0
+        return false
     }
 }

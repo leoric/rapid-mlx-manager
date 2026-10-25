@@ -43,12 +43,19 @@ final class ServerController: ObservableObject {
     @Published var binaryPath: String { didSet { defaults.set(binaryPath, forKey: Keys.binary) } }
     @Published var modelsDir: String { didSet { defaults.set(modelsDir, forKey: Keys.modelsDir) } }
     @Published var activeModel: String { didSet { defaults.set(activeModel, forKey: Keys.model) } }
+    @Published private(set) var host: String { didSet { defaults.set(host, forKey: Keys.host) } }
+    @Published private(set) var port: String { didSet { defaults.set(port, forKey: Keys.port) } }
+    /// Unchecked = server is started with --no-thinking.
+    @Published private(set) var thinking: Bool { didSet { defaults.set(thinking, forKey: Keys.thinking) } }
 
     private let defaults = UserDefaults.standard
     private enum Keys {
         static let binary = "binaryPath"
         static let modelsDir = "modelsDir"
         static let model = "activeModel"
+        static let host = "host"
+        static let port = "port"
+        static let thinking = "thinking"
     }
 
     private var process: Process?
@@ -59,8 +66,22 @@ final class ServerController: ObservableObject {
 
     var hasProcess: Bool { process != nil }
 
+    func setThinking(_ on: Bool) {
+        guard on != thinking else { return }
+        thinking = on
+        if hasProcess && !busy { restart() }      // the flag only takes effect on a fresh start
+    }
+
+    func applyEndpoint(host h: String, port p: String) {
+        let hh = h.trimmingCharacters(in: .whitespaces)
+        let pp = p.trimmingCharacters(in: .whitespaces)
+        host = hh.isEmpty ? Config.defaultHost : hh
+        port = (Int(pp).map { (1...65535).contains($0) } ?? false) ? pp : String(Config.defaultPort)
+        if hasProcess && !busy { restart() } else { Task { await pollHealth() } }
+    }
+
     func showManager() {
-        WindowManager.shared.show(id: "models", title: "Rapid-MLX Models", size: NSSize(width: 780, height: 560)) {
+        WindowManager.shared.show(id: "models", title: "Rapid-MLX Models", size: NSSize(width: 780, height: 560), closeOnEsc: true) {
             ModelManagerView().environmentObject(self).environmentObject(manager)
         }
     }
@@ -81,6 +102,9 @@ final class ServerController: ObservableObject {
         binaryPath = d.string(forKey: Keys.binary) ?? BinaryLocator.detect() ?? ""
         modelsDir = d.string(forKey: Keys.modelsDir) ?? ""
         activeModel = d.string(forKey: Keys.model) ?? ""
+        host = d.string(forKey: Keys.host) ?? Config.defaultHost
+        port = d.string(forKey: Keys.port) ?? String(Config.defaultPort)
+        thinking = d.object(forKey: Keys.thinking) as? Bool ?? true
 
         // Don't leave an orphaned server behind when the app quits.
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
@@ -171,7 +195,8 @@ final class ServerController: ObservableObject {
             return
         }
 
-        let args = ["serve", activeModel, "--host", Config.host, "--port", String(Config.port)]
+        var args = ["serve", activeModel, "--host", Config.host, "--port", String(Config.port)]
+        if !thinking { args.append("--no-thinking") }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = args
@@ -272,7 +297,7 @@ final class ServerController: ObservableObject {
     // MARK: Health
 
     private func isUp() async -> Bool {
-        await Task.detached { Probe.portOpen(host: Config.host, port: Config.port) }.value
+        await Task.detached { Probe.portOpen(host: Config.probeHost, port: Config.port) }.value
     }
 
     private func pollHealth() async {

@@ -34,6 +34,11 @@ struct ModelManagerView: View {
             }
         }
         .frame(minWidth: 720, minHeight: 500)
+        .background(
+            Button("") { NSApp.keyWindow?.performClose(nil) }
+                .keyboardShortcut(.cancelAction)
+                .opacity(0)
+        )
         .onAppear { m.loadCached(); m.loadPS() }
         .onChange(of: tab) { t in
             if t == .catalog, m.catalog.isEmpty { m.loadCatalog() }
